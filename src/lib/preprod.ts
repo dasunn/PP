@@ -11,8 +11,14 @@ const FIELD_ALIASES: Record<string, string[]> = {
   styleDescription: ['styledescription', 'styledesc', 'description', 'stylename'],
   globalStyle: ['globalstyle', 'global', 'globalstyleno', 'globalstylenumber'],
   m3Style: ['m3style', 'm3', 'm3styleno', 'm3stylenumber'],
-  newRepeat: ['newrepeat', 'newrpt', 'neworrepeat', 'newrepeatstatus'],
-  destination: ['destination', 'destinations', 'dest', 'country', 'market'],
+  newRepeat: [
+    'neworrepeatstylefrombrand',
+    'newrepeat',
+    'newrpt',
+    'neworrepeat',
+    'newrepeatstatus',
+  ],
+  destination: ['destination2', 'destination', 'destinations', 'dest', 'country', 'market'],
   prodPlant: ['prodplant', 'productionplant', 'plant', 'prodplantname'],
   embPlant: ['embplant', 'embroideryplant', 'embellishmentplant', 'embplantname'],
   graphicSoApproval: [
@@ -23,8 +29,19 @@ const FIELD_ALIASES: Record<string, string[]> = {
     'soapprovalstatus',
     'graphicso',
   ],
-  ppColor: ['ppcolor', 'ppcolour', 'ppcolors', 'ppcolours', 'color', 'colour'],
-  ppDate: ['ppdate', 'ppdt', 'ppdatetime'],
+  ppColor: [
+    'garmentcolor2',
+    'garmentcolour2',
+    'garmentcolor',
+    'garmentcolour',
+    'ppcolor',
+    'ppcolour',
+    'ppcolors',
+    'ppcolours',
+    'color',
+    'colour',
+  ],
+  ppDate: ['ppdate', 'ppdt', 'ppdatetime', 'pp'],
 }
 
 function normalize(header: string): string {
@@ -61,15 +78,87 @@ export function findHeaderRow(aoa: unknown[][]): number {
   return bestScore > 0 ? bestIdx : 0
 }
 
-// Build a map: canonical field -> actual header found in the file (or undefined).
+/**
+ * Build a map: canonical field -> actual header found in the file (or undefined).
+ * Aliases are tried in list order, so the preferred spelling wins when a sheet
+ * carries several (e.g. both "DESTINATION" and "DESTINATION2").
+ */
 export function detectColumns(headers: string[]): Record<string, string | undefined> {
   const normalized = headers.map((h) => ({ raw: h, norm: normalize(h) }))
   const out: Record<string, string | undefined> = {}
   for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
-    const hit = normalized.find((h) => aliases.includes(h.norm))
-    out[field] = hit?.raw
+    for (const alias of aliases) {
+      const hit = normalized.find((h) => h.norm === alias)
+      if (hit) {
+        out[field] = hit.raw
+        break
+      }
+    }
   }
   return out
+}
+
+const MONTHS = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+  'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+]
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/**
+ * Normalize an order-chart date cell to `yyyy-mm-dd` so it can drive the
+ * date picker in edit mode. Numeric dates are read day-first (25/12/2026);
+ * ambiguous ones (03/04/2026) fall back to month-first, matching how Excel
+ * renders them in a US locale. Anything unrecognised is returned untouched.
+ */
+export function toISODate(value: string): string {
+  const s = (value ?? '').trim()
+  if (!s) return ''
+
+  // Already ISO (possibly with a time component).
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
+
+  // Excel serial number (days since 1899-12-30).
+  if (/^\d{5}$/.test(s)) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Number(s) * 86400000)
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+  }
+
+  // d/m/yyyy, d-m-yy, d.m.yyyy … (m/d/yyyy when the 2nd part can only be a day)
+  const num = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/)
+  if (num) {
+    const a = Number(num[1])
+    const b = Number(num[2])
+    const [day, month] = b > 12 ? [b, a] : [a, b]
+    let year = Number(num[3])
+    if (year < 100) year += year < 70 ? 2000 : 1900
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year}-${pad(month)}-${pad(day)}`
+    }
+    return s
+  }
+
+  // 15-Mar-2026 / Mar 15 2026 / 15 March 2026
+  const named = s.match(/^(\d{1,2})[\s\-/]*([a-z]{3,})[\s\-/]*(\d{2,4})$/i)
+  const named2 = s.match(/^([a-z]{3,})[\s\-/]*(\d{1,2}),?[\s\-/]*(\d{2,4})$/i)
+  const parts = named
+    ? { day: named[1], mon: named[2], year: named[3] }
+    : named2
+      ? { day: named2[2], mon: named2[1], year: named2[3] }
+      : null
+  if (parts) {
+    const mi = MONTHS.indexOf(parts.mon.slice(0, 3).toLowerCase())
+    if (mi >= 0) {
+      let year = Number(parts.year)
+      if (year < 100) year += year < 70 ? 2000 : 1900
+      return `${year}-${pad(mi + 1)}-${pad(Number(parts.day))}`
+    }
+  }
+
+  return s
 }
 
 function pick(row: RawRow, header: string | undefined): string {
@@ -110,8 +199,10 @@ export interface BuildResult {
 
 /**
  * Collapse order-chart lines into Pre-Prod rows: one row per unique GLOBAL STYLE.
- * `destination` and `ppColor` accumulate as unique chip arrays across all lines
- * of the style; every other field takes the first non-empty value.
+ * `destination` and `ppColor` accumulate as unique arrays across all lines of the
+ * style; every other field takes the first non-empty value. Colours land in
+ * `colorOptions` — `ppColors` stays empty (shown as "Pending") until the user
+ * ticks the PP colour(s) in edit mode.
  */
 export function buildPreProdRows(
   raw: RawRow[],
@@ -138,7 +229,7 @@ export function buildPreProdRows(
     const destinations = uniquePreserveOrder(
       lines.flatMap((l) => splitMulti(pick(l, cols.destination))),
     )
-    const ppColors = uniquePreserveOrder(
+    const colorOptions = uniquePreserveOrder(
       lines.flatMap((l) => splitMulti(pick(l, cols.ppColor))),
     )
 
@@ -147,9 +238,7 @@ export function buildPreProdRows(
       season: firstNonEmpty(lines.map((l) => pick(l, cols.season))),
       inquiryNo: meta.inquiryNo,
       program: firstNonEmpty(lines.map((l) => pick(l, cols.program))),
-      fabricQuality: '', // manual
       styleDescription: firstNonEmpty(lines.map((l) => pick(l, cols.styleDescription))),
-      fabricMill: '', // manual
       merchant: meta.merchant,
       globalStyle: firstNonEmpty(lines.map((l) => pick(l, cols.globalStyle))),
       m3Style: firstNonEmpty(lines.map((l) => pick(l, cols.m3Style))),
@@ -158,8 +247,9 @@ export function buildPreProdRows(
       prodPlant: firstNonEmpty(lines.map((l) => pick(l, cols.prodPlant))),
       embPlant: firstNonEmpty(lines.map((l) => pick(l, cols.embPlant))),
       graphicSoApproval: firstNonEmpty(lines.map((l) => pick(l, cols.graphicSoApproval))),
-      ppColors,
-      ppDate: firstNonEmpty(lines.map((l) => pick(l, cols.ppDate))),
+      colorOptions,
+      ppColors: [], // "Pending" until the PP colour is ticked in edit mode
+      ppDate: toISODate(firstNonEmpty(lines.map((l) => pick(l, cols.ppDate)))),
       createdAt: new Date().toISOString(),
     })
   }

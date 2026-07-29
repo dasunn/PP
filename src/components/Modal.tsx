@@ -8,9 +8,18 @@ interface Props {
   children: ReactNode
   footer?: ReactNode
   maxWidth?: number
+  className?: string // extra modifier, e.g. "modal-erp"
 }
 
-export default function Modal({ title, subtitle, onClose, children, footer, maxWidth }: Props) {
+export default function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  maxWidth,
+  className,
+}: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -20,7 +29,7 @@ export default function Modal({ title, subtitle, onClose, children, footer, maxW
   return (
     <div className="overlay" onMouseDown={onClose}>
       <div
-        className="modal"
+        className={`modal${className ? ` ${className}` : ''}`}
         style={maxWidth ? { maxWidth } : undefined}
         onMouseDown={(e) => e.stopPropagation()}
       >

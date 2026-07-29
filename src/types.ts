@@ -9,15 +9,13 @@ export interface Merchant {
 }
 
 // A single Pre-Prod chart row = one unique GLOBAL STYLE.
-// Multi-line order-chart values collapse into `destinations` / `ppColors` arrays.
+// Multi-line order-chart values collapse into `destinations` / `colorOptions` arrays.
 export interface PreProdRow {
   id: string
   season: string
   inquiryNo: string
   program: string
-  fabricQuality: string // manual entry
   styleDescription: string
-  fabricMill: string // manual entry
   merchant: string // Bulk merchant / PD name
   globalStyle: string
   m3Style: string
@@ -26,8 +24,9 @@ export interface PreProdRow {
   prodPlant: string
   embPlant: string
   graphicSoApproval: string
-  ppColors: string[] // chips
-  ppDate: string
+  colorOptions: string[] // every colour read from the order chart
+  ppColors: string[] // colours ticked as PP in edit mode; empty = "Pending"
+  ppDate: string // yyyy-mm-dd when parseable
   createdAt: string
 }
 
@@ -52,9 +51,7 @@ export type EditableTextField =
   | 'season'
   | 'inquiryNo'
   | 'program'
-  | 'fabricQuality'
   | 'styleDescription'
-  | 'fabricMill'
   | 'merchant'
   | 'globalStyle'
   | 'm3Style'

@@ -14,9 +14,11 @@ interface Props {
   subtitle?: string
   actions?: ReactNode
   children: ReactNode
+  /** Fit the content to the viewport and let a single pane inside it scroll. */
+  fill?: boolean
 }
 
-export default function Layout({ title, subtitle, actions, children }: Props) {
+export default function Layout({ title, subtitle, actions, children, fill }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -57,7 +59,7 @@ export default function Layout({ title, subtitle, actions, children }: Props) {
           </div>
           {actions && <div className="topbar-actions">{actions}</div>}
         </header>
-        <main className="page">{children}</main>
+        <main className={`page${fill ? ' page-fill' : ''}`}>{children}</main>
       </div>
     </div>
   )

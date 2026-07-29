@@ -9,13 +9,23 @@ const emptyData: AppData = {
   history: [],
 }
 
+/**
+ * Rows saved before the PP-colour workflow kept every order-chart colour in
+ * `ppColors`. Those become the pickable `colorOptions`, and `ppColors` resets
+ * to empty so the chart shows "Pending" until a colour is ticked.
+ */
+function migrateRow(row: PreProdRow): PreProdRow {
+  if (row.colorOptions) return row
+  return { ...row, colorOptions: row.ppColors ?? [], ppColors: [] }
+}
+
 function load(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return seedData()
     const parsed = JSON.parse(raw) as AppData
     return {
-      preProdRows: parsed.preProdRows ?? [],
+      preProdRows: (parsed.preProdRows ?? []).map(migrateRow),
       merchants: parsed.merchants ?? [],
       history: parsed.history ?? [],
     }

@@ -49,7 +49,8 @@ a {
 /* ---------- Layout ---------- */
 .app {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -134,6 +135,7 @@ a {
   flex: 1;
   margin-left: var(--sidebar-w);
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -168,6 +170,35 @@ a {
 
 .page {
   padding: 26px 28px 60px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/*
+ * A page that gives all of its leftover height to one scrolling pane instead of
+ * scrolling itself. Keeps the table's horizontal scrollbar parked at the bottom
+ * of the viewport rather than below the last row.
+ */
+.page-fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 26px;
+}
+.page-fill > .toolbar {
+  flex: none;
+}
+.page-fill > .grid-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.page-fill .grid-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* ---------- Buttons ---------- */
@@ -338,6 +369,62 @@ table.grid thead th {
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
+  z-index: 2;
+}
+/* The actions column pins right; its header pins in both directions. */
+table.grid thead th.col-sticky {
+  z-index: 3;
+}
+
+/* ---------- Drag-resizable columns ---------- */
+/* Applied once the user has dragged: widths come from <colgroup>. */
+table.grid.grid-fixed {
+  table-layout: fixed;
+}
+table.grid.grid-fixed thead th,
+table.grid.grid-fixed tbody td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.grid.grid-fixed .chips {
+  max-width: none;
+}
+.th-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.col-resizer::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  right: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.col-resizer:hover::after {
+  background: var(--red);
+}
+/* While dragging, keep the col-resize cursor everywhere and kill text selection. */
+body.resizing-col {
+  cursor: col-resize;
+  user-select: none;
+}
+body.resizing-col .col-resizer::after {
+  background: var(--red);
 }
 table.grid tbody td {
   padding: 12px 14px;
@@ -354,6 +441,7 @@ table.grid tbody tr:last-child td {
 .col-sticky {
   position: sticky;
   right: 0;
+  z-index: 1;
   background: var(--white);
   box-shadow: -6px 0 10px -8px rgba(0, 0, 0, 0.15);
 }
@@ -367,6 +455,50 @@ table.grid tbody tr:hover .col-sticky {
 }
 .empty-cell {
   color: #c7c7d0;
+}
+
+/* ---------- Pagination ---------- */
+.pagination {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--white);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.pagination .page-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.pagination .page-size .select {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+.pagination .page-range {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pagination .page-nav {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pagination .page-nav .icon-btn {
+  width: 30px;
+  height: 30px;
+}
+.pagination .page-of {
+  padding: 0 6px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .chips {
@@ -390,6 +522,12 @@ table.grid tbody tr:hover .col-sticky {
   background: var(--line-2);
   color: var(--ink-2);
   border-color: var(--line);
+}
+/* PP colour not picked yet */
+.chip-pending {
+  background: #fff5e3;
+  color: #9a6400;
+  border-color: #f6dcae;
 }
 
 .badge {
@@ -549,6 +687,46 @@ table.grid tbody tr:hover .col-sticky {
   font-size: 11.5px;
   color: var(--muted);
   margin-top: 6px;
+}
+
+/* ---------- Mini editable grids (destinations / PP colours) ---------- */
+.mini-grid {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+.mini-grid-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+}
+.mini-grid-row.cols-1 {
+  grid-template-columns: 1fr 34px;
+}
+.mini-grid-row.cols-2 {
+  grid-template-columns: 1fr 60px 34px;
+}
+.mini-grid-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 7px;
+  margin-bottom: 4px;
+}
+.mini-check {
+  display: flex;
+  justify-content: center;
+}
+.mini-check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--red);
+  cursor: pointer;
 }
 
 /* ---------- Dropzone ---------- */

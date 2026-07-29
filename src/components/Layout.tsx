@@ -1,10 +1,22 @@
 import { type ReactNode, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Table2, Users, History, Menu, X } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Table2,
+  Users,
+  History,
+  Menu,
+  X,
+  CalendarClock,
+  CalendarRange,
+} from 'lucide-react'
+import ErrorBoundary from './ErrorBoundary'
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/tna-plan', label: 'T&A Plan', icon: CalendarRange, end: false },
   { to: '/preprod', label: 'Pre-Prod Chart', icon: Table2, end: false },
+  { to: '/tna-setup', label: 'T&A Setup', icon: CalendarClock, end: false },
   { to: '/merchants', label: 'Merchants', icon: Users, end: false },
   { to: '/history', label: 'History', icon: History, end: false },
 ]
@@ -59,7 +71,9 @@ export default function Layout({ title, subtitle, actions, children, fill }: Pro
           </div>
           {actions && <div className="topbar-actions">{actions}</div>}
         </header>
-        <main className={`page${fill ? ' page-fill' : ''}`}>{children}</main>
+        <main className={`page${fill ? ' page-fill' : ''}`}>
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </main>
       </div>
     </div>
   )

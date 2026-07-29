@@ -4,11 +4,12 @@ import { UploadCloud, FileSpreadsheet, X } from 'lucide-react'
 interface Props {
   file: File | null
   onFile: (file: File | null) => void
+  label?: string // what the file is, e.g. "the materials workbook"
 }
 
 const ACCEPT = '.xlsx,.xls,.csv'
 
-export default function Dropzone({ file, onFile }: Props) {
+export default function Dropzone({ file, onFile, label = 'the order chart' }: Props) {
   const [drag, setDrag] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -47,7 +48,7 @@ export default function Dropzone({ file, onFile }: Props) {
       }}
     >
       <UploadCloud size={34} className="dz-ico" />
-      <b>Drag &amp; drop the order chart here</b>
+      <b>Drag &amp; drop {label} here</b>
       <p>or click to browse — .xlsx, .xls or .csv</p>
       <input
         ref={inputRef}

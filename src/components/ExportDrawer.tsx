@@ -4,6 +4,7 @@ import { useStore } from '../store/store'
 import { useToast } from './Toast'
 import { COLUMNS, cellText } from '../lib/columns'
 import { exportPreProd } from '../lib/excel'
+import { styleKey } from '../lib/materials'
 import type { PreProdRow } from '../types'
 
 interface Props {
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export default function ExportDrawer({ onClose }: Props) {
-  const { preProdRows, merchants, addHistory } = useStore()
+  const { preProdRows, materials, merchants, addHistory } = useStore()
   const toast = useToast()
   const [filters, setFilters] = useState<Record<string, string>>({})
 
@@ -31,12 +32,21 @@ export default function ExportDrawer({ onClose }: Props) {
 
   const activeFilters = Object.values(filters).filter((v) => v.trim()).length
 
+  // The Materials tab carries only the lines belonging to the exported styles.
+  const matchedMaterials = useMemo(() => {
+    const styles = new Set(matched.map((r) => styleKey(r.m3Style)).filter(Boolean))
+    return materials.filter((m) => styles.has(styleKey(m.style)))
+  }, [materials, matched])
+
   function doExport() {
     const stamp = new Date().toISOString().slice(0, 10)
     const fileName = `preprod-chart_${stamp}.xlsx`
-    exportPreProd(matched, fileName)
+    exportPreProd(matched, matchedMaterials, fileName)
     addHistory({ type: 'export', fileName, rows: matched.length })
-    toast(`Exported ${matched.length} row${matched.length === 1 ? '' : 's'}`)
+    toast(
+      `Exported ${matched.length} row${matched.length === 1 ? '' : 's'}` +
+        (matchedMaterials.length ? ` · ${matchedMaterials.length} material lines` : ''),
+    )
     onClose()
   }
 
@@ -68,6 +78,13 @@ export default function ExportDrawer({ onClose }: Props) {
         {matched.length} of {preProdRows.length} rows match
         {activeFilters > 0 ? ` · ${activeFilters} filter${activeFilters === 1 ? '' : 's'}` : ''}
       </div>
+      <p className="hint" style={{ marginTop: -10, marginBottom: 18 }}>
+        {matchedMaterials.length > 0
+          ? `${matchedMaterials.length} material line${
+              matchedMaterials.length === 1 ? '' : 's'
+            } will be written to a separate “Materials” tab.`
+          : 'No material details match these rows — the Materials tab will be empty.'}
+      </p>
 
       <div className="section-label">Filter by field</div>
 

@@ -1,31 +1,37 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Download, Pencil, Trash2, Search, Table2, Columns3 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Download, Pencil, Trash2, Search, Table2, Columns3, ListTree } from 'lucide-react'
 import Layout from '../components/Layout'
 import AddRowsModal from '../components/AddRowsModal'
+import AddMaterialsModal from '../components/AddMaterialsModal'
 import EditRowModal from '../components/EditRowModal'
+import MaterialDetailsModal from '../components/MaterialDetailsModal'
 import ExportDrawer from '../components/ExportDrawer'
 import Pagination from '../components/Pagination'
 import { useStore } from '../store/store'
 import { useToast } from '../components/Toast'
 import { COLUMNS, cellText, PP_COLOR_PENDING } from '../lib/columns'
-import {
-  ACTIONS_COL_WIDTH,
-  MIN_COL_WIDTH,
-  loadColumnWidths,
-  saveColumnWidths,
-  type ColumnWidths,
-} from '../lib/columnWidths'
+import { groupMaterialsByStyle, styleKey } from '../lib/materials'
+import { ACTIONS_COL_WIDTH, PREPROD_WIDTHS_KEY } from '../lib/columnWidths'
+import { useColumnResize } from '../lib/useColumnResize'
 import type { PreProdRow } from '../types'
 
+// Stable identity for the resize hook.
+const PREPROD_COL_KEYS = COLUMNS.map((c) => c.key as string)
+
 export default function PreProdChart() {
-  const { preProdRows, deletePreProdRow } = useStore()
+  const { preProdRows, materials, deletePreProdRow } = useStore()
   const toast = useToast()
   const [adding, setAdding] = useState(false)
+  const [addingMaterials, setAddingMaterials] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [editRow, setEditRow] = useState<PreProdRow | null>(null)
+  const [detailRow, setDetailRow] = useState<PreProdRow | null>(null)
   const [query, setQuery] = useState('')
   const [pageSize, setPageSize] = useState(25)
   const [page, setPage] = useState(1)
+
+  // Material lines keyed by style, so each row can show how many it carries.
+  const materialsByStyle = useMemo(() => groupMaterialsByStyle(materials), [materials])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -55,66 +61,14 @@ export default function PreProdChart() {
   }
 
   // ---- Drag-resizable columns ----
-  const tableRef = useRef<HTMLTableElement>(null)
-  const [widths, setWidths] = useState<ColumnWidths>(() => loadColumnWidths())
-  const sized = Object.keys(widths).length > 0
-
-  useEffect(() => {
-    saveColumnWidths(widths)
-  }, [widths])
-
-  // Total is applied to the table so a fixed layout honours the widths exactly
-  // instead of stretching columns to fill the pane.
-  const totalWidth = useMemo(
-    () =>
-      sized
-        ? COLUMNS.reduce((sum, c) => sum + (widths[c.key] ?? MIN_COL_WIDTH), 0) + ACTIONS_COL_WIDTH
-        : undefined,
-    [widths, sized],
+  const { tableRef, widths, sized, totalWidth, startResize, resetWidths } = useColumnResize(
+    PREPROD_WIDTHS_KEY,
+    PREPROD_COL_KEYS,
+    ACTIONS_COL_WIDTH,
   )
 
-  const startResize = useCallback(
-    (e: React.PointerEvent<HTMLElement>, key: string) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const table = tableRef.current
-      if (!table) return
-
-      // First drag: freeze every column at the width it is rendering at, so
-      // switching to a fixed layout doesn't reshuffle the other columns.
-      const base: ColumnWidths = { ...widths }
-      table.querySelectorAll<HTMLTableCellElement>('thead th[data-col]').forEach((th) => {
-        const k = th.dataset.col
-        if (k && base[k] == null) {
-          base[k] = Math.max(MIN_COL_WIDTH, Math.round(th.getBoundingClientRect().width))
-        }
-      })
-      setWidths(base)
-
-      const startX = e.clientX
-      const startWidth = base[key] ?? MIN_COL_WIDTH
-
-      const onMove = (ev: PointerEvent) => {
-        const next = Math.max(MIN_COL_WIDTH, Math.round(startWidth + ev.clientX - startX))
-        setWidths((w) => ({ ...w, [key]: next }))
-      }
-      const onUp = () => {
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
-        document.body.classList.remove('resizing-col')
-      }
-
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
-      document.body.classList.add('resizing-col')
-    },
-    [widths],
-  )
-
-  function resetWidths() {
-    setWidths({})
+  function handleResetWidths() {
+    resetWidths()
     toast('Column widths reset')
   }
 
@@ -140,9 +94,20 @@ export default function PreProdChart() {
             <Plus size={16} />
             Styles
           </button>
+          <button
+            className="btn"
+            onClick={() => setAddingMaterials(true)}
+            title="Upload material details (Data tab)"
+          >
+            <Plus size={16} />
+            Materials
+          </button>
           <span className="count-pill">{preProdRows.length} styles</span>
+          {materials.length > 0 && (
+            <span className="count-pill">{materials.length} material lines</span>
+          )}
           {sized && (
-            <button className="btn btn-sm btn-ghost" onClick={resetWidths} title="Reset column widths">
+            <button className="btn btn-sm btn-ghost" onClick={handleResetWidths} title="Reset column widths">
               <Columns3 size={15} />
               Reset widths
             </button>
@@ -214,7 +179,9 @@ export default function PreProdChart() {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((row) => (
+                {visible.map((row) => {
+                  const matCount = materialsByStyle.get(styleKey(row.m3Style))?.length ?? 0
+                  return (
                   <tr key={row.id}>
                     {COLUMNS.map((col) => (
                       <td key={col.key} title={cellText(row, col)}>
@@ -223,6 +190,18 @@ export default function PreProdChart() {
                     ))}
                     <td className="col-sticky">
                       <div className="row-actions">
+                        <button
+                          className={`btn icon-btn btn-ghost btn-sm${matCount ? ' has-materials' : ''}`}
+                          onClick={() => setDetailRow(row)}
+                          aria-label="Material details"
+                          title={
+                            matCount
+                              ? `Material details (${matCount} line${matCount === 1 ? '' : 's'})`
+                              : 'Material details — none imported'
+                          }
+                        >
+                          <ListTree size={15} />
+                        </button>
                         <button
                           className="btn icon-btn btn-ghost btn-sm"
                           onClick={() => setEditRow(row)}
@@ -242,7 +221,8 @@ export default function PreProdChart() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={COLUMNS.length + 1} style={{ textAlign: 'center', padding: 30 }}>
@@ -268,8 +248,12 @@ export default function PreProdChart() {
       )}
 
       {adding && <AddRowsModal onClose={() => setAdding(false)} />}
+      {addingMaterials && <AddMaterialsModal onClose={() => setAddingMaterials(false)} />}
       {exporting && <ExportDrawer onClose={() => setExporting(false)} />}
       {editRow && <EditRowModal row={editRow} onClose={() => setEditRow(null)} />}
+      {detailRow && (
+        <MaterialDetailsModal row={detailRow} onClose={() => setDetailRow(null)} />
+      )}
     </Layout>
   )
 }

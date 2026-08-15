@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { CalendarRange } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { CalendarRange, LocateFixed } from 'lucide-react'
 import {
   addDays,
   dayDiff,
@@ -7,8 +7,10 @@ import {
   formatDay,
   formatDelay,
   isValidDate,
+  isWeekOff,
   parseISO,
   toDateInput,
+  type WorkWeek,
 } from '../lib/tna'
 import type { EventState, PlanRow } from '../pages/TnaPlan'
 
@@ -19,6 +21,7 @@ const PAD_DAYS = 2 // breathing room either side of the range
 interface Props {
   rows: PlanRow[]
   holidays: Set<string>
+  workWeek: WorkWeek
   query: string
 }
 
@@ -34,8 +37,9 @@ function markerDate(ev: EventState): string {
   return ev.actual || ev.due
 }
 
-export default function GanttChart({ rows, holidays, query }: Props) {
+export default function GanttChart({ rows, holidays, workWeek, query }: Props) {
   const [tip, setTip] = useState<Tip | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const range = useMemo(() => {
     // An unparseable PP Date survives import as raw text, so everything that
@@ -76,10 +80,25 @@ export default function GanttChart({ rows, holidays, query }: Props) {
   const todayIdx = range ? dayDiff(range.start, today) : null
   const showToday = todayIdx !== null && todayIdx >= 0 && todayIdx < days.length
 
-  const holidayIdx = useMemo(
-    () => days.map((d, i) => (holidays.has(d) ? i : -1)).filter((i) => i >= 0),
-    [days, holidays],
+  // Non-working = an explicit holiday, or a weekday the work-week rule skips.
+  const nonWorking = (iso: string) => holidays.has(iso) || isWeekOff(iso, workWeek)
+
+  const nonWorkingIdx = useMemo(
+    () => days.map((d, i) => (nonWorking(d) ? i : -1)).filter((i) => i >= 0),
+    [days, holidays, workWeek],
   )
+
+  /**
+   * Centre today's column in the timeline. The style column is sticky over the
+   * left of the viewport, so only the space beside it actually shows days.
+   */
+  function scrollToToday() {
+    const el = scrollRef.current
+    if (!el || todayIdx === null) return
+    const trackViewport = el.clientWidth - LABEL_W
+    const left = todayIdx * DAY_W + DAY_W / 2 - trackViewport / 2
+    el.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+  }
 
   function showTip(e: React.MouseEvent, ev: EventState) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -128,7 +147,22 @@ export default function GanttChart({ rows, holidays, query }: Props) {
 
   return (
     <div className="erp-grid-wrap gantt-wrap">
-      <div className="gantt-scroll" onScroll={() => setTip(null)}>
+      <div className="gantt-tools">
+        <button
+          className="btn btn-sm"
+          onClick={scrollToToday}
+          disabled={!showToday}
+          title={
+            showToday
+              ? "Scroll the timeline to today's date"
+              : 'Today is outside the planned date range'
+          }
+        >
+          <LocateFixed size={15} />
+          Today
+        </button>
+      </div>
+      <div className="gantt-scroll" ref={scrollRef} onScroll={() => setTip(null)}>
         <div className="gantt-body" style={{ width: LABEL_W + trackW }}>
           <div className="gantt-row gantt-months">
             <div className="gantt-label gantt-corner">Style</div>
@@ -154,11 +188,17 @@ export default function GanttChart({ rows, holidays, query }: Props) {
                 return (
                   <div
                     key={iso}
-                    className={`gantt-day${holidays.has(iso) ? ' hol' : ''}${
+                    className={`gantt-day${nonWorking(iso) ? ' hol' : ''}${
                       iso === today ? ' is-today' : ''
                     }`}
                     style={{ left: i * DAY_W, width: DAY_W }}
-                    title={holidays.has(iso) ? 'Holiday — non-working day' : undefined}
+                    title={
+                      holidays.has(iso)
+                        ? 'Holiday — non-working day'
+                        : isWeekOff(iso, workWeek)
+                          ? 'Weekly off — non-working day'
+                          : undefined
+                    }
                   >
                     <b>{d.getDate()}</b>
                     <span>{d.toLocaleDateString('en-GB', { weekday: 'narrow' })}</span>
@@ -188,7 +228,7 @@ export default function GanttChart({ rows, holidays, query }: Props) {
                   <span>{row.inquiryNo || '—'}</span>
                 </div>
                 <div className="gantt-track" style={{ width: trackW }}>
-                  {holidayIdx.map((i) => (
+                  {nonWorkingIdx.map((i) => (
                     <div key={i} className="gantt-hol" style={{ left: i * DAY_W, width: DAY_W }} />
                   ))}
                   {showToday && (

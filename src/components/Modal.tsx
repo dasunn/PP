@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 
 interface Props {
@@ -26,12 +26,28 @@ export default function Modal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  /**
+   * A backdrop dismissal only counts when the press *and* the release both land
+   * on the backdrop itself. Closing on mousedown alone threw away in-progress
+   * edits whenever a stray press reached the overlay — most visibly when a
+   * native <select> popup was dismissed over it, which closed the whole form.
+   */
+  const pressedBackdrop = useRef(false)
+
   return (
-    <div className="overlay" onMouseDown={onClose}>
+    <div
+      className="overlay"
+      onMouseDown={(e) => {
+        pressedBackdrop.current = e.target === e.currentTarget
+      }}
+      onClick={(e) => {
+        if (pressedBackdrop.current && e.target === e.currentTarget) onClose()
+        pressedBackdrop.current = false
+      }}
+    >
       <div
         className={`modal${className ? ` ${className}` : ''}`}
         style={maxWidth ? { maxWidth } : undefined}
-        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
           <div>

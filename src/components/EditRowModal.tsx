@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import Modal from './Modal'
 import { useStore } from '../store/store'
 import { useToast } from './Toast'
-import { COLUMNS, type ColumnDef } from '../lib/columns'
+import { COLUMNS, normalizePpStatus, type ColumnDef } from '../lib/columns'
 import { toISODate } from '../lib/preprod'
 import type { PreProdRow } from '../types'
 
@@ -23,7 +23,12 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 export default function EditRowModal({ row, onClose }: Props) {
   const { updatePreProdRow, merchants } = useStore()
   const toast = useToast()
-  const [draft, setDraft] = useState<PreProdRow>({ ...row })
+  // PP Status is a fixed two-state field, so an imported blank / unrecognised
+  // value is settled up front — the dropdown then always shows what is stored.
+  const [draft, setDraft] = useState<PreProdRow>(() => ({
+    ...row,
+    ppStatus: normalizePpStatus(row.ppStatus),
+  }))
 
   // Destination + PP colour are edited as their own grids below the form.
   const [destinations, setDestinations] = useState<string[]>(() =>
@@ -89,14 +94,15 @@ export default function EditRowModal({ row, onClose }: Props) {
     if (col.editKind === 'select') {
       const options = col.options ?? []
       // Keep an unrecognised imported value selectable so editing never drops it.
-      const extra = value && !options.includes(value) ? value : null
+      // A `noBlank` field is normalised into `draft`, so it always matches one.
+      const extra = !col.noBlank && value && !options.includes(value) ? value : null
       return (
         <select
           className="select"
           value={value}
           onChange={(e) => setText(col.key, e.target.value)}
         >
-          <option value="">—</option>
+          {!col.noBlank && <option value="">—</option>}
           {options.map((o) => (
             <option key={o} value={o}>
               {o}
@@ -129,6 +135,9 @@ export default function EditRowModal({ row, onClose }: Props) {
       <input className="input" value={value} onChange={(e) => setText(col.key, e.target.value)} />
     )
   }
+
+  // Ticked but unnamed colours are dropped on save — warn instead of silently losing them.
+  const ppTickedWithoutName = colors.some((c) => c.pp && !c.name.trim())
 
   const formColumns = COLUMNS.filter(
     (c) => c.editKind !== 'list' && c.editKind !== 'colors',
@@ -241,10 +250,19 @@ export default function EditRowModal({ row, onClose }: Props) {
         <Plus size={15} />
         Add color
       </button>
-      <p className="hint">
-        Tick the colour that is the PP colour. Until one is ticked the chart shows
-        <b> Pending</b>.
-      </p>
+      {ppTickedWithoutName ? (
+        // A nameless colour cannot be stored, so saving would quietly discard
+        // the tick and leave the chart on "Pending" with no explanation.
+        <p className="hint" style={{ color: 'var(--danger)', fontWeight: 600 }}>
+          Type a colour name next to the ticked <b>PP</b> box — a colour with no name
+          cannot be saved.
+        </p>
+      ) : (
+        <p className="hint">
+          Tick the colour that is the PP colour. Until one is ticked the chart shows
+          <b> Pending</b>. Approval itself is set by <b>PP Status</b> above.
+        </p>
+      )}
     </Modal>
   )
 }

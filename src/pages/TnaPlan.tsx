@@ -44,7 +44,7 @@ const LEGEND: PlanStatus[] = ['notStarted', 'early', 'onTime', 'slight', 'late']
 
 export default function TnaPlan() {
   const [tab, setTab] = useState<Tab>('plan')
-  const { preProdRows, tnaIntervalDays, holidays, tnaPlans, setPlanDate } = useStore()
+  const { preProdRows, tnaIntervalDays, holidays, workWeek, tnaPlans, setPlanDate } = useStore()
   const [query, setQuery] = useState('')
   const [pageSize, setPageSize] = useState(25)
   const [page, setPage] = useState(1)
@@ -57,7 +57,7 @@ export default function TnaPlan() {
   const planRows: PlanRow[] = useMemo(
     () =>
       preProdRows.map((row) => {
-        const plan = computePlanDates(row.ppDate, tnaIntervalDays, holidaySet)
+        const plan = computePlanDates(row.ppDate, tnaIntervalDays, holidaySet, workWeek)
         const cells = tnaPlans[row.id] ?? {}
         const events = PLAN_EVENTS.map((ev) => {
           const planned = plan[ev.key] ?? ''
@@ -78,7 +78,7 @@ export default function TnaPlan() {
         })
         return { row, events }
       }),
-    [preProdRows, tnaIntervalDays, holidaySet, tnaPlans],
+    [preProdRows, tnaIntervalDays, holidaySet, workWeek, tnaPlans],
   )
 
   const filtered = useMemo(() => {
@@ -307,7 +307,7 @@ export default function TnaPlan() {
           />
         </div>
       ) : (
-        <GanttChart rows={filtered} holidays={holidaySet} query={query} />
+        <GanttChart rows={filtered} holidays={holidaySet} workWeek={workWeek} query={query} />
       )}
     </Layout>
   )

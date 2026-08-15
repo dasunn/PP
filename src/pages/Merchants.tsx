@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import { useStore } from '../store/store'
 import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/Confirm'
 import type { Merchant } from '../types'
 
 const blank = { fullName: '', email: '', status: 'Active' as const }
@@ -11,6 +12,7 @@ const blank = { fullName: '', email: '', status: 'Active' as const }
 export default function Merchants() {
   const { merchants, addMerchant, updateMerchant, deleteMerchant } = useStore()
   const toast = useToast()
+  const confirm = useConfirm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Merchant | null>(null)
   const [form, setForm] = useState<{ fullName: string; email: string; status: 'Active' | 'Inactive' }>(blank)
@@ -44,11 +46,21 @@ export default function Merchants() {
     setOpen(false)
   }
 
-  function remove(m: Merchant) {
-    if (window.confirm(`Delete merchant "${m.fullName}"?`)) {
-      deleteMerchant(m.id)
-      toast('Merchant deleted')
-    }
+  async function remove(m: Merchant) {
+    const ok = await confirm({
+      title: 'Delete this merchant?',
+      message: (
+        <>
+          <b>{m.fullName}</b> will no longer be selectable in the Pre-Prod merchant lookup.
+          Existing rows keep the name already saved on them.
+        </>
+      ),
+      confirmLabel: 'Delete merchant',
+      danger: true,
+    })
+    if (!ok) return
+    deleteMerchant(m.id)
+    toast('Merchant deleted')
   }
 
   return (
@@ -176,7 +188,7 @@ export default function Merchants() {
             </select>
           </div>
           {error && (
-            <p style={{ color: 'var(--red)', fontSize: 12.5, fontWeight: 600, margin: 0 }}>{error}</p>
+            <p style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, margin: 0 }}>{error}</p>
           )}
         </Modal>
       )}

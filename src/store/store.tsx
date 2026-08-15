@@ -7,8 +7,10 @@ import type {
   Merchant,
   PreProdRow,
   TnaPlanCell,
+  WorkWeek,
 } from '../types'
 import { styleKey } from '../lib/materials'
+import { PP_STATUS_NOT_APPROVED } from '../lib/columns'
 
 const STORAGE_KEY = 'preprod-dashboard-data-v1'
 
@@ -20,16 +22,23 @@ const emptyData: AppData = {
   tnaIntervalDays: {},
   holidays: [],
   tnaPlans: {},
+  workWeek: 'all',
 }
 
-/**
- * Rows saved before the PP-colour workflow kept every order-chart colour in
- * `ppColors`. Those become the pickable `colorOptions`, and `ppColors` resets
- * to empty so the chart shows "Pending" until a colour is ticked.
- */
+/** Brings rows saved by earlier versions up to the current shape. */
 function migrateRow(row: PreProdRow): PreProdRow {
-  if (row.colorOptions) return row
-  return { ...row, colorOptions: row.ppColors ?? [], ppColors: [] }
+  let next = row
+  // Before the PP-colour workflow every order-chart colour sat in `ppColors`.
+  // Those become the pickable `colorOptions`, and `ppColors` resets to empty so
+  // the chart shows "Pending" until a colour is ticked.
+  if (!next.colorOptions) {
+    next = { ...next, colorOptions: next.ppColors ?? [], ppColors: [] }
+  }
+  // Rows saved before PP Status existed start off unapproved.
+  if (!next.ppStatus) {
+    next = { ...next, ppStatus: PP_STATUS_NOT_APPROVED }
+  }
+  return next
 }
 
 function load(): AppData {
@@ -45,6 +54,9 @@ function load(): AppData {
       tnaIntervalDays: parsed.tnaIntervalDays ?? {},
       holidays: parsed.holidays ?? [],
       tnaPlans: parsed.tnaPlans ?? {},
+      // Existing saves predate this setting — "whole week" matches their
+      // actual behaviour (weekends only skipped if explicitly a holiday).
+      workWeek: parsed.workWeek ?? 'all',
     }
   } catch {
     return emptyData
@@ -65,6 +77,7 @@ function seedData(): AppData {
     tnaIntervalDays: {},
     holidays: [],
     tnaPlans: {},
+    workWeek: 'all',
   }
 }
 
@@ -92,6 +105,7 @@ interface StoreValue extends AppData {
   // T&A setup
   setIntervalDays: (key: string, days: number | null) => void
   clearIntervalDays: () => void
+  setWorkWeek: (w: WorkWeek) => void
   addHoliday: (h: Omit<Holiday, 'id' | 'createdAt'>) => void
   updateHoliday: (h: Holiday) => void
   deleteHoliday: (id: string) => void
@@ -170,6 +184,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }),
 
     clearIntervalDays: () => setData((d) => ({ ...d, tnaIntervalDays: {} })),
+
+    setWorkWeek: (w) => setData((d) => ({ ...d, workWeek: w })),
 
     addHoliday: (h) =>
       setData((d) => ({

@@ -3,7 +3,8 @@ import Modal from './Modal'
 import Dropzone from './Dropzone'
 import { useStore } from '../store/store'
 import { useToast } from './Toast'
-import { parseOrderChart } from '../lib/excel'
+import Spinner from './Spinner'
+import { parseOrderChart, yieldToPaint } from '../lib/excel'
 import { buildPreProdRows } from '../lib/preprod'
 
 interface Props {
@@ -29,6 +30,7 @@ export default function AddRowsModal({ onClose }: Props) {
 
     setBusy(true)
     try {
+      await yieldToPaint()
       const { headers, rows } = await parseOrderChart(file)
       if (rows.length === 0) {
         setBusy(false)
@@ -69,7 +71,8 @@ export default function AddRowsModal({ onClose }: Props) {
             Cancel
           </button>
           <button className="btn btn-primary" onClick={handleOk} disabled={!canSubmit}>
-            {busy ? 'Processing…' : 'OK'}
+            {busy && <Spinner />}
+            {busy ? 'Reading workbook…' : 'OK'}
           </button>
         </>
       }
@@ -104,11 +107,11 @@ export default function AddRowsModal({ onClose }: Props) {
 
       <div className="field">
         <label>Order chart file</label>
-        <Dropzone file={file} onFile={setFile} />
+        <Dropzone file={file} onFile={setFile} disabled={busy} />
       </div>
 
       {error && (
-        <p style={{ color: 'var(--red)', fontSize: 12.5, margin: '4px 0 0', fontWeight: 600 }}>
+        <p style={{ color: 'var(--danger)', fontSize: 12.5, margin: '4px 0 0', fontWeight: 600 }}>
           {error}
         </p>
       )}

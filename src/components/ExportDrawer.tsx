@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import Drawer from './Drawer'
+import Spinner from './Spinner'
 import { useStore } from '../store/store'
 import { useToast } from './Toast'
 import { COLUMNS, cellText } from '../lib/columns'
-import { exportPreProd } from '../lib/excel'
+import { exportPreProd, yieldToPaint } from '../lib/excel'
 import { styleKey } from '../lib/materials'
 import type { PreProdRow } from '../types'
 
@@ -15,6 +16,8 @@ export default function ExportDrawer({ onClose }: Props) {
   const { preProdRows, materials, merchants, addHistory } = useStore()
   const toast = useToast()
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   function setFilter(key: string, value: string) {
     setFilters((f) => ({ ...f, [key]: value }))
@@ -38,16 +41,27 @@ export default function ExportDrawer({ onClose }: Props) {
     return materials.filter((m) => styles.has(styleKey(m.style)))
   }, [materials, matched])
 
-  function doExport() {
+  async function doExport() {
     const stamp = new Date().toISOString().slice(0, 10)
     const fileName = `preprod-chart_${stamp}.xlsx`
-    exportPreProd(matched, matchedMaterials, fileName)
-    addHistory({ type: 'export', fileName, rows: matched.length })
-    toast(
-      `Exported ${matched.length} row${matched.length === 1 ? '' : 's'}` +
-        (matchedMaterials.length ? ` · ${matchedMaterials.length} material lines` : ''),
-    )
-    onClose()
+
+    setBusy(true)
+    setError('')
+    try {
+      // Building and writing the workbook is synchronous and can block for a
+      // while on a large chart, so let the spinner reach the screen first.
+      await yieldToPaint()
+      exportPreProd(matched, matchedMaterials, fileName)
+      addHistory({ type: 'export', fileName, rows: matched.length })
+      toast(
+        `Exported ${matched.length} row${matched.length === 1 ? '' : 's'}` +
+          (matchedMaterials.length ? ` · ${matchedMaterials.length} material lines` : ''),
+      )
+      onClose()
+    } catch {
+      setBusy(false)
+      setError('Could not build the Excel file. Please try again.')
+    }
   }
 
   return (
@@ -57,16 +71,24 @@ export default function ExportDrawer({ onClose }: Props) {
       onClose={onClose}
       footer={
         <>
-          <button className="btn" style={{ flex: 1 }} onClick={() => setFilters({})}>
+          <button
+            className="btn"
+            style={{ flex: 1 }}
+            onClick={() => setFilters({})}
+            disabled={busy}
+          >
             Reset
           </button>
           <button
             className="btn btn-primary"
             style={{ flex: 2 }}
             onClick={doExport}
-            disabled={matched.length === 0}
+            disabled={matched.length === 0 || busy}
           >
-            Export {matched.length} row{matched.length === 1 ? '' : 's'} (.xlsx)
+            {busy && <Spinner />}
+            {busy
+              ? 'Building file…'
+              : `Export ${matched.length} row${matched.length === 1 ? '' : 's'} (.xlsx)`}
           </button>
         </>
       }
@@ -85,6 +107,12 @@ export default function ExportDrawer({ onClose }: Props) {
             } will be written to a separate “Materials” tab.`
           : 'No material details match these rows — the Materials tab will be empty.'}
       </p>
+
+      {error && (
+        <p style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 0 }}>
+          {error}
+        </p>
+      )}
 
       <div className="section-label">Filter by field</div>
 

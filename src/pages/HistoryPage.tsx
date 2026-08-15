@@ -75,7 +75,7 @@ export default function HistoryPage() {
                     </td>
                     <td style={{ fontWeight: 600, color: 'var(--ink)' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                        <FileSpreadsheet size={15} style={{ color: 'var(--red)' }} />
+                        <FileSpreadsheet size={15} style={{ color: 'var(--primary)' }} />
                         {h.fileName}
                       </span>
                     </td>

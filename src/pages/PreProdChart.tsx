@@ -9,7 +9,8 @@ import ExportDrawer from '../components/ExportDrawer'
 import Pagination from '../components/Pagination'
 import { useStore } from '../store/store'
 import { useToast } from '../components/Toast'
-import { COLUMNS, cellText, PP_COLOR_PENDING } from '../lib/columns'
+import { useConfirm } from '../components/Confirm'
+import { COLUMNS, cellText, statusTone, type ColumnDef } from '../lib/columns'
 import { groupMaterialsByStyle, styleKey } from '../lib/materials'
 import { ACTIONS_COL_WIDTH, PREPROD_WIDTHS_KEY } from '../lib/columnWidths'
 import { useColumnResize } from '../lib/useColumnResize'
@@ -21,6 +22,7 @@ const PREPROD_COL_KEYS = COLUMNS.map((c) => c.key as string)
 export default function PreProdChart() {
   const { preProdRows, materials, deletePreProdRow } = useStore()
   const toast = useToast()
+  const confirm = useConfirm()
   const [adding, setAdding] = useState(false)
   const [addingMaterials, setAddingMaterials] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -53,11 +55,21 @@ export default function PreProdChart() {
     [filtered, safePage, pageSize],
   )
 
-  function remove(row: PreProdRow) {
-    if (window.confirm(`Delete row for global style "${row.globalStyle || '(blank)'}"?`)) {
-      deletePreProdRow(row.id)
-      toast('Row deleted')
-    }
+  async function remove(row: PreProdRow) {
+    const ok = await confirm({
+      title: 'Delete this row?',
+      message: (
+        <>
+          Global style <b>{row.globalStyle || '(blank)'}</b> will be removed from the chart,
+          along with its T&amp;A plan dates. This cannot be undone.
+        </>
+      ),
+      confirmLabel: 'Delete row',
+      danger: true,
+    })
+    if (!ok) return
+    deletePreProdRow(row.id)
+    toast('Row deleted')
   }
 
   // ---- Drag-resizable columns ----
@@ -185,7 +197,7 @@ export default function PreProdChart() {
                   <tr key={row.id}>
                     {COLUMNS.map((col) => (
                       <td key={col.key} title={cellText(row, col)}>
-                        {renderCell(row, col.key, col.kind)}
+                        {renderCell(row, col)}
                       </td>
                     ))}
                     <td className="col-sticky">
@@ -258,15 +270,19 @@ export default function PreProdChart() {
   )
 }
 
-function renderCell(row: PreProdRow, key: keyof PreProdRow, kind: 'text' | 'chips') {
-  if (kind === 'chips') {
-    const arr = row[key] as string[]
-    // PP colour stays "Pending" until one of the order-chart colours is ticked.
-    if (key === 'ppColors' && (!arr || arr.length === 0)) {
-      return <span className="chip chip-pending">{PP_COLOR_PENDING}</span>
-    }
-    if (!arr || arr.length === 0) return <span className="empty-cell">—</span>
-    const cls = key === 'destinations' ? 'chip chip-plain' : 'chip'
+function renderCell(row: PreProdRow, col: ColumnDef) {
+  const text = cellText(row, col)
+
+  // Status fields read as one colour-coded chip.
+  if (col.kind === 'status') {
+    if (!text) return <span className="empty-cell">—</span>
+    return <span className={`chip chip-${statusTone(text)}`}>{text}</span>
+  }
+
+  if (col.kind === 'chips') {
+    const arr = (row[col.key] as string[]) ?? []
+    if (arr.length === 0) return <span className="empty-cell">—</span>
+    const cls = col.key === 'destinations' ? 'chip chip-plain' : 'chip'
     return (
       <div className="chips">
         {arr.map((v, i) => (
@@ -277,6 +293,7 @@ function renderCell(row: PreProdRow, key: keyof PreProdRow, kind: 'text' | 'chip
       </div>
     )
   }
-  const val = row[key] as string
-  return val ? val : <span className="empty-cell">—</span>
+
+  // PP Color falls back to "Pending" here, so it never renders as a bare dash.
+  return text ? text : <span className="empty-cell">—</span>
 }

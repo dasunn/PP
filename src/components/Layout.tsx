@@ -9,8 +9,10 @@ import {
   X,
   CalendarClock,
   CalendarRange,
+  LogOut,
 } from 'lucide-react'
 import ErrorBoundary from './ErrorBoundary'
+import { useAuth } from './Auth'
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -32,6 +34,7 @@ interface Props {
 
 export default function Layout({ title, subtitle, actions, children, fill }: Props) {
   const [open, setOpen] = useState(false)
+  const { signOut } = useAuth()
 
   return (
     <div className="app">
@@ -51,7 +54,13 @@ export default function Layout({ title, subtitle, actions, children, fill }: Pro
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-foot">Pre-Prod Dashboard · MVP v1.0</div>
+        <div className="sidebar-foot">
+          <button className="btn btn-sm btn-ghost sidebar-signout" onClick={signOut}>
+            <LogOut size={15} />
+            Sign out
+          </button>
+          <span>Pre-Prod Dashboard · MVP v1.0</span>
+        </div>
       </aside>
 
       <div className="main">

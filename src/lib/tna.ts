@@ -133,20 +133,80 @@ export function isValidDate(iso: string): boolean {
   return parseISO(iso) !== null
 }
 
+/** Monday of the week containing `d` (local time), as yyyy-mm-dd. */
+export function startOfWeek(d: Date = new Date()): string {
+  const day = d.getDay() // 0 = Sun .. 6 = Sat
+  const diff = day === 0 ? -6 : 1 - day
+  const monday = new Date(d)
+  monday.setDate(d.getDate() + diff)
+  return toDateInput(monday)
+}
+
+// ---- Work week: which weekdays are non-working, before Holidays are applied ----
+
+export type WorkWeek = 'monFri' | 'monSat' | 'all'
+
+export interface WorkWeekOption {
+  key: WorkWeek
+  label: string
+  desc: string
+  /** getDay() values (0 = Sun .. 6 = Sat) treated as non-working. */
+  off: number[]
+}
+
+export const WORK_WEEK_OPTIONS: WorkWeekOption[] = [
+  {
+    key: 'monFri',
+    label: 'Monday to Friday',
+    desc: 'Saturday and Sunday are non-working days.',
+    off: [0, 6],
+  },
+  {
+    key: 'monSat',
+    label: 'Monday to Saturday',
+    desc: 'Sunday is a non-working day.',
+    off: [0],
+  },
+  {
+    key: 'all',
+    label: 'Whole week',
+    desc: 'Every day is a working day — only the Holidays tab is skipped.',
+    off: [],
+  },
+]
+
+const WORK_WEEK_OFF: Record<WorkWeek, Set<number>> = {
+  monFri: new Set([0, 6]),
+  monSat: new Set([0]),
+  all: new Set(),
+}
+
+/** True when `iso` falls on a day the work week setting treats as non-working. */
+export function isWeekOff(iso: string, workWeek: WorkWeek): boolean {
+  const d = parseISO(iso)
+  if (!d) return false
+  return WORK_WEEK_OFF[workWeek].has(d.getDay())
+}
+
 // ---- Backward planning ----
 
 /**
- * Steps back `days` working days from `iso`, skipping anything on the holiday
- * list. Only the Holidays tab defines non-working days — weekends are treated
- * as working days unless they are listed there.
+ * Steps back `days` working days from `iso`, skipping the work week's
+ * non-working weekdays plus anything on the Holidays tab.
  */
-export function subtractWorkingDays(iso: string, days: number, holidays: Set<string>): string {
+export function subtractWorkingDays(
+  iso: string,
+  days: number,
+  holidays: Set<string>,
+  workWeek: WorkWeek = 'all',
+): string {
   let cur = iso
   const steps = Math.max(0, Math.min(Math.round(days), 3650))
+  const isNonWorking = (d: string) => holidays.has(d) || isWeekOff(d, workWeek)
   for (let i = 0; i < steps; i++) {
     cur = addDays(cur, -1)
     // Walk further back while the landing day is a non-working day.
-    while (holidays.has(cur)) cur = addDays(cur, -1)
+    while (isNonWorking(cur)) cur = addDays(cur, -1)
   }
   return cur
 }
@@ -163,6 +223,7 @@ export function computePlanDates(
   ppDate: string,
   intervalDays: TnaIntervalDays,
   holidays: Set<string>,
+  workWeek: WorkWeek = 'all',
 ): PlanDates {
   const plan: PlanDates = {}
   if (!parseISO(ppDate)) return plan
@@ -174,7 +235,7 @@ export function computePlanDates(
     const days = intervalDays[`${from.key}__${to.key}`]
     const toDate = plan[to.key]
     if (days === undefined || !toDate) break
-    plan[from.key] = subtractWorkingDays(toDate, days, holidays)
+    plan[from.key] = subtractWorkingDays(toDate, days, holidays, workWeek)
   }
   return plan
 }

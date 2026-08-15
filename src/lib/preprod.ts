@@ -1,5 +1,6 @@
 import type { PreProdRow } from '../types'
 import { uid } from '../store/store'
+import { normalizePpStatus } from './columns'
 
 // Raw order-chart row: header -> cell value (all strings, trimmed)
 export type RawRow = Record<string, string>
@@ -40,6 +41,13 @@ const FIELD_ALIASES: Record<string, string[]> = {
     'ppcolours',
     'color',
     'colour',
+  ],
+  ppStatus: [
+    'ppstatus',
+    'ppapprovalstatus',
+    'ppapproval',
+    'ppapproved',
+    'ppsamplestatus',
   ],
   ppDate: ['ppdate', 'ppdt', 'ppdatetime', 'pp'],
 }
@@ -202,7 +210,8 @@ export interface BuildResult {
  * `destination` and `ppColor` accumulate as unique arrays across all lines of the
  * style; every other field takes the first non-empty value. Colours land in
  * `colorOptions` — `ppColors` stays empty (shown as "Pending") until the user
- * ticks the PP colour(s) in edit mode.
+ * ticks the PP colour(s) in edit mode. `ppStatus` defaults to "Not Approved"
+ * unless the sheet carries a PP Status column saying otherwise.
  */
 export function buildPreProdRows(
   raw: RawRow[],
@@ -249,6 +258,8 @@ export function buildPreProdRows(
       graphicSoApproval: firstNonEmpty(lines.map((l) => pick(l, cols.graphicSoApproval))),
       colorOptions,
       ppColors: [], // "Pending" until the PP colour is ticked in edit mode
+      // Blank / unrecognised on the sheet means the PP is not approved yet.
+      ppStatus: normalizePpStatus(firstNonEmpty(lines.map((l) => pick(l, cols.ppStatus)))),
       ppDate: toISODate(firstNonEmpty(lines.map((l) => pick(l, cols.ppDate)))),
       createdAt: new Date().toISOString(),
     })

@@ -1,8 +1,8 @@
 // ---- Domain types for the Pre-Prod Dashboard ----
 
-import type { TnaIntervalDays } from './lib/tna'
+import type { TnaIntervalDays, WorkWeek } from './lib/tna'
 
-export type { TnaIntervalDays }
+export type { TnaIntervalDays, WorkWeek }
 
 export interface Merchant {
   id: string
@@ -30,6 +30,7 @@ export interface PreProdRow {
   graphicSoApproval: string
   colorOptions: string[] // every colour read from the order chart
   ppColors: string[] // colours ticked as PP in edit mode; empty = "Pending"
+  ppStatus: string // "Approved" / "Not Approved" — drives the PP Approved stat
   ppDate: string // yyyy-mm-dd when parseable
   createdAt: string
 }
@@ -41,6 +42,7 @@ export interface MaterialRow {
   style: string
   prodGrp: string
   itemDescription: string
+  gmtColour: string
   matColour: string
   supplier: string
   createdAt: string
@@ -85,6 +87,8 @@ export interface AppData {
   holidays: Holiday[]
   /** Revised-plan and actual dates captured on the T&A plan grid. */
   tnaPlans: TnaPlans
+  /** Which weekdays count as working days when plan dates are calculated. */
+  workWeek: WorkWeek
 }
 
 // Editable single-value fields on a PreProdRow (used by the edit form).
@@ -100,4 +104,5 @@ export type EditableTextField =
   | 'prodPlant'
   | 'embPlant'
   | 'graphicSoApproval'
+  | 'ppStatus'
   | 'ppDate'

@@ -3,7 +3,8 @@ import Modal from './Modal'
 import Dropzone from './Dropzone'
 import { useStore } from '../store/store'
 import { useToast } from './Toast'
-import { MissingSheetError, parseMaterialData } from '../lib/excel'
+import Spinner from './Spinner'
+import { MissingSheetError, parseMaterialData, yieldToPaint } from '../lib/excel'
 import { EXCLUDED_PROD_GRP, MATERIAL_SHEET_NAME, buildMaterialRows } from '../lib/materials'
 
 interface Props {
@@ -24,6 +25,7 @@ export default function AddMaterialsModal({ onClose }: Props) {
 
     setBusy(true)
     try {
+      await yieldToPaint()
       const { headers, rows } = await parseMaterialData(file)
       if (rows.length === 0) {
         setBusy(false)
@@ -78,17 +80,18 @@ export default function AddMaterialsModal({ onClose }: Props) {
             Cancel
           </button>
           <button className="btn btn-primary" onClick={handleOk} disabled={!file || busy}>
-            {busy ? 'Processing…' : 'OK'}
+            {busy && <Spinner />}
+            {busy ? 'Reading workbook…' : 'OK'}
           </button>
         </>
       }
     >
       <div className="field">
         <label>Materials file</label>
-        <Dropzone file={file} onFile={setFile} label="the materials workbook" />
+        <Dropzone file={file} onFile={setFile} label="the materials workbook" disabled={busy} />
         <p className="hint">
           Expected columns: <b>STYLE</b>, <b>PROD_GRP</b>, <b>ITEM_DESCRIPTION</b>,{' '}
-          <b>MAT_COLOUR</b>, <b>SUPPLIER</b>. Lines are matched to Pre-Prod rows on{' '}
+          <b>GMT_COLOUR</b>, <b>MAT_COLOUR</b>, <b>SUPPLIER</b>. Lines are matched to Pre-Prod rows on{' '}
           <b>STYLE</b> = <b>M3 Style</b>. Re-uploading a style replaces its existing lines.
         </p>
         <p className="hint">
@@ -98,7 +101,7 @@ export default function AddMaterialsModal({ onClose }: Props) {
       </div>
 
       {error && (
-        <p style={{ color: 'var(--red)', fontSize: 12.5, margin: '4px 0 0', fontWeight: 600 }}>
+        <p style={{ color: 'var(--danger)', fontSize: 12.5, margin: '4px 0 0', fontWeight: 600 }}>
           {error}
         </p>
       )}

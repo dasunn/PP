@@ -15,6 +15,18 @@ export interface ParsedSheet {
   rows: RawRow[]
 }
 
+/**
+ * Hand the main thread back long enough for React to paint. Reading and writing
+ * a workbook is synchronous and blocks, so without this the spinner is only
+ * committed after the work it is meant to cover has already finished.
+ *
+ * A macrotask, not `requestAnimationFrame` — rAF is throttled to a stop in a
+ * background tab, which would leave an import hanging until the tab is focused.
+ */
+export function yieldToPaint(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 // Thrown when a workbook doesn't carry the worksheet we were told to read.
 export class MissingSheetError extends Error {
   constructor(

@@ -5,11 +5,18 @@ interface Props {
   file: File | null
   onFile: (file: File | null) => void
   label?: string // what the file is, e.g. "the materials workbook"
+  /** Locked while the chosen file is being parsed. */
+  disabled?: boolean
 }
 
 const ACCEPT = '.xlsx,.xls,.csv'
 
-export default function Dropzone({ file, onFile, label = 'the order chart' }: Props) {
+export default function Dropzone({
+  file,
+  onFile,
+  label = 'the order chart',
+  disabled = false,
+}: Props) {
   const [drag, setDrag] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -25,7 +32,12 @@ export default function Dropzone({ file, onFile, label = 'the order chart' }: Pr
         <span style={{ color: 'var(--muted)', fontSize: 12 }}>
           {(file.size / 1024).toFixed(0)} KB
         </span>
-        <button className="btn icon-btn btn-ghost btn-sm" onClick={() => onFile(null)} aria-label="Remove">
+        <button
+          className="btn icon-btn btn-ghost btn-sm"
+          onClick={() => onFile(null)}
+          disabled={disabled}
+          aria-label="Remove"
+        >
           <X size={16} />
         </button>
       </div>
@@ -34,17 +46,18 @@ export default function Dropzone({ file, onFile, label = 'the order chart' }: Pr
 
   return (
     <div
-      className={`dropzone${drag ? ' drag' : ''}`}
-      onClick={() => inputRef.current?.click()}
+      className={`dropzone${drag ? ' drag' : ''}${disabled ? ' is-disabled' : ''}`}
+      aria-disabled={disabled}
+      onClick={() => !disabled && inputRef.current?.click()}
       onDragOver={(e) => {
         e.preventDefault()
-        setDrag(true)
+        if (!disabled) setDrag(true)
       }}
       onDragLeave={() => setDrag(false)}
       onDrop={(e) => {
         e.preventDefault()
         setDrag(false)
-        handleFiles(e.dataTransfer.files)
+        if (!disabled) handleFiles(e.dataTransfer.files)
       }}
     >
       <UploadCloud size={34} className="dz-ico" />

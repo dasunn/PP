@@ -4,25 +4,46 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import { useStore } from '../store/store'
 import { useToast } from '../components/Toast'
-import { TNA_INTERVALS, formatDate, toDateInput, totalDays } from '../lib/tna'
+import { useConfirm } from '../components/Confirm'
+import {
+  TNA_INTERVALS,
+  WORK_WEEK_OPTIONS,
+  formatDate,
+  toDateInput,
+  totalDays,
+} from '../lib/tna'
 import type { Holiday } from '../types'
 
-type Tab = 'intervals' | 'holidays'
+type Tab = 'intervals' | 'workweek' | 'holidays'
 
 const blankHoliday = { date: '', note: '' }
+
+// Monday-first display order for the day chips — getDay() itself is Sun-first.
+const WEEK_DAYS = [
+  { idx: 1, label: 'M' },
+  { idx: 2, label: 'T' },
+  { idx: 3, label: 'W' },
+  { idx: 4, label: 'T' },
+  { idx: 5, label: 'F' },
+  { idx: 6, label: 'S' },
+  { idx: 0, label: 'S' },
+]
 
 export default function TnaSetup() {
   const [tab, setTab] = useState<Tab>('intervals')
   const {
     tnaIntervalDays,
     holidays,
+    workWeek,
     setIntervalDays,
     clearIntervalDays,
+    setWorkWeek,
     addHoliday,
     updateHoliday,
     deleteHoliday,
   } = useStore()
   const toast = useToast()
+  const confirm = useConfirm()
 
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Holiday | null>(null)
@@ -58,18 +79,33 @@ export default function TnaSetup() {
     setOpen(false)
   }
 
-  function removeHoliday(h: Holiday) {
-    if (window.confirm(`Remove ${formatDate(h.date)} from the holiday list?`)) {
-      deleteHoliday(h.id)
-      toast('Holiday deleted')
-    }
+  async function removeHoliday(h: Holiday) {
+    const ok = await confirm({
+      title: 'Remove this holiday?',
+      message: (
+        <>
+          <b>{formatDate(h.date)}</b> will count as a working day again, and every T&amp;A plan
+          date is recalculated.
+        </>
+      ),
+      confirmLabel: 'Remove holiday',
+      danger: true,
+    })
+    if (!ok) return
+    deleteHoliday(h.id)
+    toast('Holiday deleted')
   }
 
-  function resetDays() {
-    if (window.confirm('Clear the number of days on every interval?')) {
-      clearIntervalDays()
-      toast('Intervals cleared')
-    }
+  async function resetDays() {
+    const ok = await confirm({
+      title: 'Clear every interval?',
+      message: `All ${filled} interval day count${filled === 1 ? '' : 's'} will be cleared, which leaves every T&A plan date blank until they are filled in again.`,
+      confirmLabel: 'Clear intervals',
+      danger: true,
+    })
+    if (!ok) return
+    clearIntervalDays()
+    toast('Intervals cleared')
   }
 
   // Blank clears the value; anything else is clamped to a non-negative whole number.
@@ -92,12 +128,12 @@ export default function TnaSetup() {
             <RotateCcw size={16} />
             Reset days
           </button>
-        ) : (
+        ) : tab === 'holidays' ? (
           <button className="btn btn-primary" onClick={startAdd}>
             <Plus size={16} />
             Add holiday
           </button>
-        )
+        ) : undefined
       }
     >
       <div className="tabs">
@@ -107,6 +143,12 @@ export default function TnaSetup() {
         >
           Time Intervals
           <span className="tab-count">{filled}/{TNA_INTERVALS.length}</span>
+        </button>
+        <button
+          className={`tab${tab === 'workweek' ? ' active' : ''}`}
+          onClick={() => setTab('workweek')}
+        >
+          Work Week
         </button>
         <button
           className={`tab${tab === 'holidays' ? ' active' : ''}`}
@@ -159,12 +201,47 @@ export default function TnaSetup() {
                   <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>
                     Total lead time
                   </td>
-                  <td style={{ fontWeight: 800, color: 'var(--red-dark)' }}>
+                  <td style={{ fontWeight: 800, color: 'var(--primary-dark)' }}>
                     {totalDays(tnaIntervalDays)} days
                   </td>
                 </tr>
               </tfoot>
             </table>
+          </div>
+        </div>
+      ) : tab === 'workweek' ? (
+        <div className="card card-pad">
+          <p className="hint" style={{ marginTop: 0, marginBottom: 16 }}>
+            Pick which days are worked. Plan dates step backwards from PP Date one day at a
+            time, skipping non-working days here plus anything on the Holidays tab.
+          </p>
+          <div className="workweek-options">
+            {WORK_WEEK_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                className={`workweek-option${workWeek === opt.key ? ' active' : ''}`}
+                onClick={() => setWorkWeek(opt.key)}
+              >
+                <span className="workweek-radio">
+                  <i />
+                </span>
+                <span className="workweek-body">
+                  <b>{opt.label}</b>
+                  <p>{opt.desc}</p>
+                </span>
+                <span className="workweek-days">
+                  {WEEK_DAYS.map((d, i) => (
+                    <span
+                      key={i}
+                      className={`wd-chip${opt.off.includes(d.idx) ? ' off' : ''}`}
+                    >
+                      {d.label}
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       ) : (
@@ -260,7 +337,7 @@ export default function TnaSetup() {
             />
           </div>
           {error && (
-            <p style={{ color: 'var(--red)', fontSize: 12.5, fontWeight: 600, margin: 0 }}>{error}</p>
+            <p style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, margin: 0 }}>{error}</p>
           )}
         </Modal>
       )}

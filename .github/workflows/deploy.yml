@@ -61,7 +61,11 @@ jobs:
               --json > deploy.json
           fi
 
-          URL=$(jq -r '.deploy_url // .url' deploy.json)
+          if [ "$IS_PROD" = "true" ]; then
+           URL=$(jq -r '.url // .deploy_url' deploy.json)
+          else
+           URL=$(jq -r '.deploy_url // .url' deploy.json)
+          fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Deployed to $URL"
           echo "### Netlify deploy: $URL" >> "$GITHUB_STEP_SUMMARY"
